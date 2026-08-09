@@ -201,11 +201,7 @@ export async function deleteFIRCaseFromSupabase(id: string): Promise<boolean> {
 }
 
 // --- LAND DISPUTES ---
-// Helper to safely format dates (converts empty strings "" to null for PostgreSQL DATE types)
-const formatDateForSupabase = (dateStr?: string | null): string | null => {
-  if (!dateStr || dateStr.trim() === '') return null;
-  return dateStr.trim();
-};
+
 
 // --- LAND DISPUTES ---
 export async function fetchLandDisputesFromSupabase(): Promise<LandDispute[] | null> {
