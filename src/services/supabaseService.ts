@@ -201,32 +201,81 @@ export async function deleteFIRCaseFromSupabase(id: string): Promise<boolean> {
 }
 
 // --- LAND DISPUTES ---
+// Helper to safely format dates (converts empty strings "" to null for PostgreSQL DATE types)
+const formatDateForSupabase = (dateStr?: string | null): string | null => {
+  if (!dateStr || dateStr.trim() === '') return null;
+  return dateStr.trim();
+};
+
+// --- LAND DISPUTES ---
 export async function fetchLandDisputesFromSupabase(): Promise<LandDispute[] | null> {
   if (!isSupabaseConfigured() || !supabase) return null;
   try {
-    const { data, error } = await supabase.from('land_disputes').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('land_disputes')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     if (error) {
       console.error('Error fetching land disputes from Supabase:', error);
       return null;
     }
-    return data as LandDispute[];
+
+    if (!data) return [];
+
+    // Map PostgreSQL snake_case columns back to camelCase React properties
+    return data.map((row: any) => ({
+      id: row.id,
+      ps: row.ps,
+      date: row.date || '',
+      victimName: row.victim_name || row.victimName || '',
+      victimAddress: row.victim_address || row.victimAddress || '',
+      oppositePartyName: row.opposite_party_name || row.oppositePartyName || undefined,
+      plotDetails: row.plot_details || row.plotDetails || '',
+      disputeNature: row.dispute_nature || row.disputeNature || '',
+      status: row.status || 'Pending',
+      disposalDate: row.disposal_date || row.disposalDate || undefined,
+      disposalRemarks: row.disposal_remarks || row.disposalRemarks || undefined,
+      janataDarbarAction: row.janata_darbar_action || row.janataDarbarAction || undefined,
+      createdAt: row.created_at || new Date().toISOString().split('T')[0],
+    }));
   } catch (err) {
-    console.error('Supabase exception:', err);
+    console.error('Supabase exception fetching Land Disputes:', err);
     return null;
   }
 }
 
 export async function saveLandDisputeToSupabase(dispute: LandDispute): Promise<boolean> {
-  if (!isSupabaseConfigured() || !supabase) return false;
+  if (!isSupabaseConfigured() || !supabase || !dispute) return false;
   try {
-    const { error } = await supabase.from('land_disputes').upsert([dispute], { onConflict: 'id' });
+    // Map camelCase React fields to match your exact Supabase land_disputes schema
+    const payload = {
+      id: dispute.id,
+      ps: dispute.ps,
+      date: formatDateForSupabase(dispute.date),
+      victim_name: dispute.victimName,
+      victim_address: dispute.victimAddress,
+      opposite_party_name: dispute.oppositePartyName || null,
+      plot_details: dispute.plotDetails,
+      dispute_nature: dispute.disputeNature,
+      status: dispute.status || 'Pending',
+      disposal_date: formatDateForSupabase(dispute.disposalDate),
+      disposal_remarks: dispute.disposalRemarks || null,
+      janata_darbar_action: dispute.janataDarbarAction || null,
+      created_at: dispute.createdAt ? new Date(dispute.createdAt).toISOString() : new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('land_disputes')
+      .upsert([payload], { onConflict: 'id' });
+
     if (error) {
-      console.error('Error saving land dispute to Supabase:', error);
+      console.error('Error saving land dispute to Supabase:', error.message, error.details);
       return false;
     }
     return true;
   } catch (err) {
-    console.error('Supabase exception:', err);
+    console.error('Supabase exception saving land dispute:', err);
     return false;
   }
 }
@@ -235,34 +284,74 @@ export async function saveLandDisputeToSupabase(dispute: LandDispute): Promise<b
 export async function fetchUDCasesFromSupabase(): Promise<UDCase[] | null> {
   if (!isSupabaseConfigured() || !supabase) return null;
   try {
-    const { data, error } = await supabase.from('ud_cases').select('*');
+    const { data, error } = await supabase
+      .from('ud_cases')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     if (error) {
       console.error('Error fetching UD cases from Supabase:', error);
       return null;
     }
-    return data as UDCase[];
+
+    if (!data) return [];
+
+    // Map PostgreSQL snake_case columns back to camelCase React properties
+    return data.map((row: any) => ({
+      id: row.id,
+      udCaseNo: row.ud_case_no || row.udCaseNo || '',
+      ps: row.ps,
+      date: row.date || '',
+      deceasedName: row.deceased_name || row.deceasedName || '',
+      deceasedAgeGender: row.deceased_age_gender || row.deceasedAgeGender || undefined,
+      placeOfOccurrence: row.place_of_occurrence || row.placeOfOccurrence || '',
+      causeOfDeath: row.cause_of_death || row.causeOfDeath || '',
+      postMortemReportStatus: row.post_mortem_report_status || row.postMortemReportStatus || 'Pending',
+      visceralReportStatus: row.visceral_report_status || row.visceralReportStatus || 'Not Required',
+      status: row.status || 'Under Investigation',
+      ciSupervisionRemarks: row.ci_supervision_remarks || row.ciSupervisionRemarks || undefined,
+      sdpoRemarks: row.sdpo_remarks || row.sdpoRemarks || undefined,
+    }));
   } catch (err) {
-    console.error('Supabase exception:', err);
+    console.error('Supabase exception fetching UD Cases:', err);
     return null;
   }
 }
 
 export async function saveUDCaseToSupabase(udCase: UDCase): Promise<boolean> {
-  if (!isSupabaseConfigured() || !supabase) return false;
+  if (!isSupabaseConfigured() || !supabase || !udCase) return false;
   try {
-    const { error } = await supabase.from('ud_cases').upsert([udCase], { onConflict: 'id' });
+    // Map camelCase React fields to match your exact Supabase ud_cases schema
+    const payload = {
+      id: udCase.id,
+      ud_case_no: udCase.udCaseNo,
+      ps: udCase.ps,
+      date: formatDateForSupabase(udCase.date),
+      deceased_name: udCase.deceasedName,
+      deceased_age_gender: udCase.deceasedAgeGender || null,
+      place_of_occurrence: udCase.placeOfOccurrence,
+      cause_of_death: udCase.causeOfDeath,
+      post_mortem_report_status: udCase.postMortemReportStatus || 'Pending',
+      visceral_report_status: udCase.visceralReportStatus || 'Not Required',
+      status: udCase.status || 'Under Investigation',
+      ci_supervision_remarks: udCase.ciSupervisionRemarks || null,
+      sdpo_remarks: udCase.sdpoRemarks || null,
+    };
+
+    const { error } = await supabase
+      .from('ud_cases')
+      .upsert([payload], { onConflict: 'id' });
+
     if (error) {
-      console.error('Error saving UD case to Supabase:', error);
+      console.error('Error saving UD case to Supabase:', error.message, error.details);
       return false;
     }
     return true;
   } catch (err) {
-    console.error('Supabase exception:', err);
+    console.error('Supabase exception saving UD case:', err);
     return false;
   }
-}
-
-// --- INVESTIGATING OFFICERS (IOs) ---
+}// --- INVESTIGATING OFFICERS (IOs) ---
 export async function fetchIOsFromSupabase(): Promise<InvestigatingOfficer[] | null> {
   if (!isSupabaseConfigured() || !supabase) return null;
   try {
