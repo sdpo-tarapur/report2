@@ -71,36 +71,120 @@ export async function deleteUserAccountFromSupabase(id: string): Promise<boolean
 }
 
 // --- FIR CASES ---
+// Helper to safely format dates (converts empty strings "" to null for PostgreSQL DATE types)
+const formatDateForSupabase = (dateStr?: string | null): string | null => {
+  if (!dateStr || dateStr.trim() === '') return null;
+  return dateStr.trim();
+};
+
+// --- FIR CASES ---
 export async function fetchFIRCasesFromSupabase(): Promise<FIRCase[] | null> {
   if (!isSupabaseConfigured() || !supabase) return null;
   try {
-    const { data, error } = await supabase.from('fir_cases').select('*').order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('fir_cases')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     if (error) {
       console.error('Error fetching FIR cases from Supabase:', error);
       return null;
     }
-    return data as FIRCase[];
+
+    if (!data) return [];
+
+    // Map snake_case PostgreSQL columns back to camelCase React state objects
+    return data.map((row: any) => ({
+      id: row.id,
+      firNumber: row.fir_number || '',
+      ps: row.ps,
+      firDate: row.fir_date || '',
+      sections: row.sections || '',
+      complainantName: row.complainant_name || '',
+      complainantPhone: row.complainant_phone || undefined,
+      placeOfOccurrence: row.place_of_occurrence || '',
+      ioName: row.io_name || '',
+      designation: row.designation || 'PENDING_DESIGNATION',
+      designationDate: row.designation_date || undefined,
+      deadlineDays: row.deadline_days || 60,
+      status: row.status || 'Under Investigation',
+      chargesheetNumber: row.chargesheet_number || undefined,
+      chargesheetDate: row.chargesheet_date || undefined,
+      chargesheetUploadedCCTNS: row.chargesheet_uploaded_cctns ?? false,
+      chargesheetCCTNSDate: row.chargesheet_cctns_date || undefined,
+      caseDiaryUploadedCCTNS: row.case_diary_uploaded_cctns ?? false,
+      lastCaseDiaryNo: row.last_case_diary_no || undefined,
+      lastCaseDiaryDate: row.last_case_diary_date || undefined,
+      poVisitDate: row.po_visit_date || undefined,
+      supervisionDate: row.supervision_date || undefined,
+      prDates: row.pr_dates || undefined,
+      finalPrDate: row.final_pr_date || undefined,
+      caseReviewDates: row.case_review_dates || undefined,
+      sdpoSupervisionNote: row.sdpo_supervision_note || undefined,
+      ciSupervisionNote: row.ci_supervision_note || undefined,
+      psProgressRemarks: row.ps_progress_remarks || undefined,
+      createdAt: row.created_at || new Date().toISOString().split('T')[0],
+      updatedAt: row.updated_at || new Date().toISOString().split('T')[0],
+    }));
   } catch (err) {
-    console.error('Supabase exception:', err);
+    console.error('Supabase exception fetching FIR cases:', err);
     return null;
   }
 }
 
 export async function saveFIRCaseToSupabase(firCase: FIRCase): Promise<boolean> {
-  if (!isSupabaseConfigured() || !supabase) return false;
+  if (!isSupabaseConfigured() || !supabase || !firCase) return false;
+
   try {
-    const { error } = await supabase.from('fir_cases').upsert([firCase], { onConflict: 'id' });
+    // Map camelCase React fields to match your exact Supabase snake_case schema
+    const payload = {
+      id: firCase.id,
+      fir_number: firCase.firNumber,
+      ps: firCase.ps,
+      fir_date: formatDateForSupabase(firCase.firDate),
+      sections: firCase.sections,
+      complainant_name: firCase.complainantName,
+      complainant_phone: firCase.complainantPhone || null,
+      place_of_occurrence: firCase.placeOfOccurrence,
+      io_name: firCase.ioName,
+      designation: firCase.designation || 'PENDING_DESIGNATION',
+      designation_date: formatDateForSupabase(firCase.designationDate),
+      deadline_days: Number(firCase.deadlineDays) || 60,
+      status: firCase.status || 'Under Investigation',
+      chargesheet_number: firCase.chargesheetNumber || null,
+      chargesheet_date: formatDateForSupabase(firCase.chargesheetDate),
+      chargesheet_uploaded_cctns: Boolean(firCase.chargesheetUploadedCCTNS),
+      chargesheet_cctns_date: formatDateForSupabase(firCase.chargesheetCCTNSDate),
+      case_diary_uploaded_cctns: Boolean(firCase.caseDiaryUploadedCCTNS),
+      last_case_diary_no: firCase.lastCaseDiaryNo || null,
+      last_case_diary_date: formatDateForSupabase(firCase.lastCaseDiaryDate),
+      po_visit_date: formatDateForSupabase(firCase.poVisitDate),
+      supervision_date: formatDateForSupabase(firCase.supervisionDate),
+      pr_dates: firCase.prDates && firCase.prDates.length > 0 ? firCase.prDates : null,
+      final_pr_date: formatDateForSupabase(firCase.finalPrDate),
+      case_review_dates: firCase.caseReviewDates && firCase.caseReviewDates.length > 0 ? firCase.caseReviewDates : null,
+      sdpo_supervision_note: firCase.sdpoSupervisionNote || null,
+      ci_supervision_note: firCase.ciSupervisionNote || null,
+      ps_progress_remarks: firCase.psProgressRemarks || null,
+      created_at: firCase.createdAt ? new Date(firCase.createdAt).toISOString() : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('fir_cases')
+      .upsert([payload], { onConflict: 'id' });
+
     if (error) {
-      console.error('Error saving FIR case to Supabase:', error);
+      console.error('Error saving FIR case to Supabase:', error.message, error.details);
       return false;
     }
+
     return true;
   } catch (err) {
-    console.error('Supabase exception:', err);
+    console.error('Supabase exception saving FIR case:', err);
     return false;
   }
 }
-
 export async function deleteFIRCaseFromSupabase(id: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
   try {
