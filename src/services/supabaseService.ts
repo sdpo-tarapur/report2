@@ -8,53 +8,74 @@ import { UserAccount, FIRCase, LandDispute, UDCase, InvestigatingOfficer, DailyC
  */
 
 // --- USER ACCOUNTS ---
+// --- USER ACCOUNTS ---
+
 export async function fetchUserAccountsFromSupabase(): Promise<UserAccount[] | null> {
-  if (!isSupabaseConfigured()) return null;
+  if (!isSupabaseConfigured() || !supabase) return null;
 
   try {
     const { data, error } = await supabase.from('user_accounts').select('*');
     if (error) {
-      console.error('Supabase fetch user_accounts error:', error);
+      console.error('Supabase fetch user_accounts error:', error.message, error.details);
       return null;
     }
 
     if (!data) return [];
 
-    // Safely map Supabase rows to UserAccount objects
+    // Safely map snake_case PostgreSQL columns back to camelCase UserAccount objects
     return data.map((row: any) => ({
       id: String(row.id || `user-${Date.now()}`),
-      // Handle both camelCase (userId) and snake_case (user_id) column names safely
-      userId: String(row.userId || row.user_id || '').trim(),
+      userId: String(row.user_id || row.userId || '').trim(),
       password: String(row.password || ''),
       role: row.role || 'SDPO',
-      permissionLevel: row.permissionLevel || row.permission_level || 'EDITOR',
-      officerName: String(row.officerName || row.officer_name || 'Officer'),
+      permissionLevel: row.permission_level || row.permissionLevel || 'EDITOR',
+      officerName: String(row.officer_name || row.officerName || 'Officer'),
       rank: String(row.rank || 'Police Officer'),
-      policeStation: row.policeStation || row.police_station || 'Subdivision HQ',
-      contactNumber: row.contactNumber || row.contact_number || '',
-      isActive: row.isActive ?? row.is_active ?? true,
+      policeStation: row.police_station || row.policeStation || 'Subdivision HQ',
+      contactNumber: row.contact_number || row.contactNumber || '',
+      isActive: row.is_active ?? row.isActive ?? true,
+      lastLogin: row.last_login || row.lastLogin || undefined,
     }));
   } catch (err) {
-    console.error('Failed to fetch user accounts:', err);
+    console.error('Failed to fetch user accounts from Supabase:', err);
     return null;
   }
 }
 
 export async function saveUserAccountToSupabase(account: UserAccount): Promise<boolean> {
-  if (!isSupabaseConfigured() || !supabase) return false;
+  if (!isSupabaseConfigured() || !supabase || !account) return false;
+
   try {
-    const { error } = await supabase.from('user_accounts').upsert([account], { onConflict: 'id' });
+    // Explicitly map camelCase React properties to match your Supabase user_accounts schema
+    const payload = {
+      id: account.id,
+      user_id: account.userId.trim().toLowerCase(),
+      password: account.password,
+      role: account.role,
+      permission_level: account.permissionLevel || 'EDITOR',
+      officer_name: account.officerName,
+      rank: account.rank,
+      police_station: account.policeStation,
+      contact_number: account.contactNumber || null,
+      is_active: account.isActive ?? true,
+      last_login: account.lastLogin ? new Date(account.lastLogin).toISOString() : null,
+    };
+
+    const { error } = await supabase
+      .from('user_accounts')
+      .upsert([payload], { onConflict: 'id' });
+
     if (error) {
-      console.error('Error saving user account to Supabase:', error);
+      console.error('Error saving user account to Supabase:', error.message, error.details);
       return false;
     }
+
     return true;
   } catch (err) {
-    console.error('Supabase exception:', err);
+    console.error('Supabase exception saving user account:', err);
     return false;
   }
 }
-
 export async function deleteUserAccountFromSupabase(id: string): Promise<boolean> {
   if (!isSupabaseConfigured() || !supabase) return false;
   try {
